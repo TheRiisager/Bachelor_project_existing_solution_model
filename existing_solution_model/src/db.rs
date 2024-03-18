@@ -6,8 +6,6 @@ pub struct DBEntry {
     pub id: i32,
     pub col1: String,
     pub col2: String,
-    pub hash1: Option<String>,
-    pub hash2: Option<String>
 }
 
 pub struct DBService {
@@ -29,12 +27,12 @@ impl DBService {
         });
 
         let _ = match client.query(
-            "CREATE TABLE IF NOT EXISTS data(id Integer PRIMARY KEY, col2 TEXT, col3 TEXT, hash1 TEXT, hash2 TEXT);",&[]).await {
+            "CREATE TABLE IF NOT EXISTS data(id Integer PRIMARY KEY, col2 TEXT, col3 TEXT);",&[]).await {
                 Ok(res) => res,
                 Err(e) => panic!("{:?}", e),
             };
 
-        let statement = match client.prepare("INSERT INTO data (id, col2, col3, hash1, hash2) VALUES ($1, $2, $3, $4, $5);").await {
+        let statement = match client.prepare("INSERT INTO data (id, col2, col3) VALUES ($1, $2, $3);").await {
             Ok(statement) => statement,
             Err(e) => panic!("{:?}", e),
         };
@@ -50,9 +48,7 @@ impl DBService {
         &[
             &entry.id, 
             &entry.col1, 
-            &entry.col2, 
-            &entry.hash1.unwrap(), 
-            &entry.hash2.unwrap()
+            &entry.col2
         ])
         .await?;
 

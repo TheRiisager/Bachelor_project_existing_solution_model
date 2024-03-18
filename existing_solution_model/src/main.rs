@@ -44,20 +44,8 @@ async fn main() -> Result<(), Box<dyn Error>>{
         let start = Instant::now();
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let task: JoinHandle<u128> = tokio::spawn(async move {
-            let mut entry: DBEntry = serde_json::from_slice(&delivery.data).unwrap();
+            let entry: DBEntry = serde_json::from_slice(&delivery.data).unwrap();
             let p = permit;
-            let mut hasher = Sha256::new();
-            hasher.update(&entry.col1);
-            let hash1 = hasher.finalize();
-            let res1 = base16ct::lower::encode_string(&hash1);
-
-            let mut hasher2 = Sha256::new();
-            hasher2.update(&entry.col2);
-            let hash2 = hasher2.finalize();
-            let res2 = base16ct::lower::encode_string(&hash2);
-
-            entry.hash1 = Some(res1);
-            entry.hash2 = Some(res2);
 
             let _ = DB_SERVICE
                 .get()
