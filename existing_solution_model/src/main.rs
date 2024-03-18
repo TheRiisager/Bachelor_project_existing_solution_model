@@ -1,4 +1,5 @@
 mod db;
+mod audit_db;
 
 use db::DBEntry;
 use futures::future::join_all;
@@ -10,9 +11,10 @@ use sha2::{Sha256, Digest};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-use crate::db::DBService;
+use crate::{audit_db::{AuditDBService, AuditEntry}, db::DBService};
 
 static DB_SERVICE:OnceLock<DBService> = OnceLock::new();
+static SECONDARY_DB_SERVICE:OnceLock<AuditDBService> = OnceLock::new();
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>>{
@@ -34,7 +36,9 @@ async fn main() -> Result<(), Box<dyn Error>>{
     println!("rabbit init complete");
 
     let serv = DBService::new().await;
+    let serv2 = AuditDBService::new().await;
     let _ = DB_SERVICE.set(serv);
+    let _ = SECONDARY_DB_SERVICE.set(serv2);
     println!("db init complete");
 
     let mut tasks: Vec<JoinHandle<u128>> = Vec::new();
@@ -44,8 +48,9 @@ async fn main() -> Result<(), Box<dyn Error>>{
         let start = Instant::now();
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let task: JoinHandle<u128> = tokio::spawn(async move {
-            let mut entry: DBEntry = serde_json::from_slice(&delivery.data).unwrap();
+            let entry: DBEntry = serde_json::from_slice(&delivery.data).unwrap();
             let p = permit;
+            
             let mut hasher = Sha256::new();
             hasher.update(&entry.col1);
             let hash1 = hasher.finalize();
@@ -56,13 +61,18 @@ async fn main() -> Result<(), Box<dyn Error>>{
             let hash2 = hasher2.finalize();
             let res2 = base16ct::lower::encode_string(&hash2);
 
-            entry.hash1 = Some(res1);
-            entry.hash2 = Some(res2);
-
             let _ = DB_SERVICE
                 .get()
                 .expect("No DB service")
                 .save(entry).await;
+
+            let _ = SECONDARY_DB_SERVICE
+                .get()
+                .expect("no audit DB service")
+                .save(AuditEntry {
+                    hash1: res1,
+                    hash2: res2
+                }).await;
             drop(p);
             let duration = start.elapsed();
             println!("message processed in {:?}", duration);

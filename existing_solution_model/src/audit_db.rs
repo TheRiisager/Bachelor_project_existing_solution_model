@@ -2,20 +2,19 @@ use serde::Deserialize;
 use tokio_postgres::{Client, Error, NoTls, Statement};
 
 #[derive(Deserialize, Debug)]
-pub struct DBEntry {
-    pub id: i32,
-    pub col1: String,
-    pub col2: String,
+pub struct AuditEntry {
+    pub hash1: String,
+    pub hash2: String
 }
 
-pub struct DBService {
+pub struct AuditDBService {
     pub client: Client,
     pub statement: Statement
 }
 
-impl DBService {
+impl AuditDBService {
     pub async fn new() -> Self {
-        let (client, connection) = match tokio_postgres::connect("host=localhost user=postgres password=postgres dbname=data port=5431", NoTls).await {
+        let (client, connection) = match tokio_postgres::connect("host=localhost user=postgres password=postgres dbname=data port=5430", NoTls).await {
             Ok((client, connection)) => (client, connection),
             Err(e) => panic!("{:?}", e),
         };
@@ -27,12 +26,12 @@ impl DBService {
         });
 
         let _ = match client.query(
-            "CREATE TABLE IF NOT EXISTS data(id Integer PRIMARY KEY, col2 TEXT, col3 TEXT);",&[]).await {
+            "CREATE TABLE IF NOT EXISTS data(id Integer PRIMARY KEY, hash1 TEXT, hash2 TEXT);",&[]).await {
                 Ok(res) => res,
                 Err(e) => panic!("{:?}", e),
             };
 
-        let statement = match client.prepare("INSERT INTO data (id, col2, col3) VALUES ($1, $2, $3);").await {
+        let statement = match client.prepare("INSERT INTO data (hash1, hash2) VALUES ($1, $2);").await {
             Ok(statement) => statement,
             Err(e) => panic!("{:?}", e),
         };
@@ -43,12 +42,11 @@ impl DBService {
         }
     }
 
-    pub async fn save(&self, entry: DBEntry) -> Result<(), Error> {
+    pub async fn save(&self, entry: AuditEntry) -> Result<(), Error> {
         let _query = self.client.query(&self.statement, 
         &[
-            &entry.id, 
-            &entry.col1, 
-            &entry.col2, 
+            &entry.hash1, 
+            &entry.hash2, 
         ])
         .await?;
 
